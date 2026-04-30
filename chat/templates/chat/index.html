@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Мессенджер</title>
+</head>
+<body>
+    <h1>Мессенджер</h1>
+    <p>Привет, {{ request.user.username }}! <a href="{% url 'logout' %}">Выйти</a></p>
+
+    {% if messages %}
+        <ul>
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <h2>Список пользователей</h2>
+    {% if users %}
+        <form id="send-form">
+            {% csrf_token %}
+            <div>
+                <label for="recipient">Выберите получателя:</label>
+                <select name="recipient" id="recipient" required>
+                    {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="text">Сообщение:</label><br>
+                <textarea name="text" id="text" rows="4" cols="50" required></textarea>
+            </div>
+            <button type="submit">Отправить</button>
+        </form>
+    {% else %}
+        <p>Другие пользователи пока не зарегистрированы.</p>
+    {% endif %}
+
+    <h2>Сообщения</h2>
+    <div id="messages-list">
+        {% if messages_list %}
+            <ul>
+                {% for item in messages_list %}
+                    <li><strong>{{ item.sender.username }}</strong> → <strong>{{ item.recipient.username }}</strong>: {{ item.text }} <em>({{ item.created_at }})</em></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Сообщений нет.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function loadMessages() {
+            fetch('{% url "get_messages" %}', {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messagesList = document.getElementById('messages-list');
+                if (data.messages.length > 0) {
+                    let html = '<ul>';
+                    data.messages.forEach(msg => {
+                        html += `<li><strong>${msg.sender}</strong> → <strong>${msg.recipient}</strong>: ${msg.text} <em>(${new Date(msg.created_at).toLocaleString()})</em></li>`;
+                    });
+                    html += '</ul>';
+                    messagesList.innerHTML = html;
+                } else {
+                    messagesList.innerHTML = '<p>Сообщений нет.</p>';
+                }
+            })
+            .catch(error => console.error('Error loading messages:', error));
+        }
+
+        document.getElementById('send-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            fetch('{% url "send_message" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('text').value = '';
+                    loadMessages();
+                } else {
+                    alert(data.error);
+                }
+            })
+            .catch(error => console.error('Error sending message:', error));
+        });
+
+        // Load messages on page load
+        loadMessages();
+        // Update messages every 5 seconds
+        setInterval(loadMessages, 5000);
+    </script>
+</body>
+</html>
